@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users collection - only readable by the owning user (server-side auth handles writes)
+    match /users/{userId} {
+      allow read: if false;   // Server-only access via Admin SDK
+      allow write: if false;  // Server-only access via Admin SDK
+    }
+
+    // Diary entries - server-only access via Admin SDK
+    match /diaries/{entryId} {
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}
+// Note: All reads and writes go through the Ktor backend using Firebase Admin SDK.
+// The Admin SDK bypasses these rules. These rules prevent direct client access.

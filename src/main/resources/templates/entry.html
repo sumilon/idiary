@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>Diary Entry – Memoiré</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+
+<div class="app-layout">
+
+    <!-- ── Header ── -->
+    <header class="app-header">
+        <div class="header-inner">
+            <a href="/dashboard" class="btn-back">
+                <svg width="18" height="18" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                Back
+            </a>
+            <div class="header-brand">
+                <span class="brand-icon-sm">✦</span>
+                <span class="brand-name-sm">Memoiré</span>
+            </div>
+            <div class="header-right">
+                <button class="btn-save" id="saveBtn" onclick="saveEntry()">
+                    <svg width="16" height="16" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                    Save
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ── Editor ── -->
+    <main class="entry-main">
+
+        <!-- Date + Mood bar -->
+        <div class="entry-meta-bar">
+            <div class="entry-date-display" id="entryDate"></div>
+            <div class="mood-picker">
+                <span class="mood-label">Mood:</span>
+                <div class="mood-options">
+                    <button class="mood-btn" data-mood="happy"    title="Happy">😊</button>
+                    <button class="mood-btn" data-mood="sad"      title="Sad">😔</button>
+                    <button class="mood-btn" data-mood="excited"  title="Excited">🤩</button>
+                    <button class="mood-btn" data-mood="calm"     title="Calm">😌</button>
+                    <button class="mood-btn" data-mood="anxious"  title="Anxious">😰</button>
+                    <button class="mood-btn" data-mood="angry"    title="Angry">😤</button>
+                    <button class="mood-btn" data-mood="grateful" title="Grateful">🙏</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Writing area -->
+        <div class="entry-editor">
+
+            <!-- Title -->
+            <input type="text" id="entryTitle"
+                   class="entry-title-input"
+                   placeholder="Give your entry a title…"
+                   maxlength="100">
+
+            <!-- Original + AI panels -->
+            <div class="editor-panels" id="editorPanels">
+
+                <!-- Your writing -->
+                <div class="editor-panel" id="originalPanel">
+                    <div class="panel-label">Your writing</div>
+                    <textarea id="entryContent"
+                              class="content-textarea"
+                              placeholder="What's on your mind today?&#10;&#10;Write freely — your thoughts, feelings, experiences…"></textarea>
+                </div>
+
+                <!-- AI result (hidden until AI is used) -->
+                <div class="editor-panel ai-panel hidden" id="aiPanel">
+                    <div class="panel-label">
+                        <span class="ai-badge">✦ AI Enhanced</span>
+                    </div>
+                    <div id="aiContent" class="ai-content-display"></div>
+                    <div class="ai-actions">
+                        <button class="btn-use-ai"        onclick="useAiContent()">Use this version</button>
+                        <button class="btn-keep-original" onclick="keepOriginal()">Keep my original</button>
+                    </div>
+                </div>
+
+            </div><!-- /editor-panels -->
+
+            <!-- AI toolbar -->
+            <div class="ai-toolbar">
+                <div class="ai-toolbar-label">✦ AI Writing Assistant</div>
+                <div class="ai-options">
+                    <select id="aiInstruction" class="ai-select">
+                        <option value="improve">✨ Improve writing</option>
+                        <option value="grammar">📝 Fix grammar</option>
+                        <option value="expand">🌱 Expand details</option>
+                        <option value="shorten">✂️ Make concise</option>
+                        <option value="formal">🎩 Make formal</option>
+                    </select>
+                    <button class="btn-ai" id="aiBtn" onclick="rewriteWithAI()">
+                        <svg width="14" height="14" viewBox="0 0 24 24"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                        Enhance with AI
+                    </button>
+                </div>
+            </div>
+
+            <!-- AI error message -->
+            <div id="aiError" class="ai-error hidden"></div>
+
+        </div><!-- /entry-editor -->
+
+        <!-- Save status toast -->
+        <div id="saveStatus" class="save-status hidden"></div>
+
+    </main>
+</div>
+
+<!--
+  Hidden fields read by app.js to know:
+  - entryId   : the diary entry ID (empty string = new entry)
+  - isNewEntry: "true" or "false"
+  These are injected by PageRoutes.kt when serving this page.
+-->
+<input type="hidden" id="entryId"           value="">
+<input type="hidden" id="isNewEntry"        value="true">
+<input type="hidden" id="selectedMood"      value="">
+<input type="hidden" id="aiGeneratedContent" value="">
+<input type="hidden" id="usingAiContent"    value="false">
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
