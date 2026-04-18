@@ -6,7 +6,6 @@ import com.diary.services.GrokAIService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -16,80 +15,68 @@ fun Route.diaryRoutes(grokService: GrokAIService) {
     authenticate("auth-jwt") {
         route("/diary") {
 
-            // Get all entries for user
+            // List all entries for the authenticated user
             get {
-                val userId = call.userId()
+                val userId  = call.userId()
                 val entries = FirebaseService.getUserEntries(userId)
-                val items = entries.map { entry ->
-                    DiaryListItem(
-                        id = entry.id,
-                        title = entry.title.ifBlank { "Untitled" },
-                        preview = entry.content.take(150),  // single content field, no branching needed
-                        mood = entry.mood,
-                        createdAt = entry.createdAt,
-                        updatedAt = entry.updatedAt
-                    )
-                }
+                val items   = entries.map { it.toListItem() }
                 call.respond(ApiResponse(success = true, data = items))
             }
 
-            // Get single entry
+            // Get a single entry
             get("/{id}") {
-                val userId = call.userId()
-                val entryId = call.parameters["id"] ?: return@get call.respond(
-                    HttpStatusCode.BadRequest, ApiResponse<Unit>(success = false, message = "Missing entry ID")
-                )
-                val entry = FirebaseService.getEntryById(entryId, userId)
+                val userId  = call.userId()
+                val entryId = call.requireParam("id") ?: return@get
+                val entry   = FirebaseService.getEntryById(entryId, userId)
                     ?: return@get call.respond(
-                        HttpStatusCode.NotFound, ApiResponse<Unit>(success = false, message = "Entry not found")
+                        HttpStatusCode.NotFound,
+                        ApiResponse<Unit>(success = false, message = "Entry not found")
                     )
                 call.respond(ApiResponse(success = true, data = entry))
             }
 
-            // Create entry
+            // Create a new entry
             post {
-                val userId = call.userId()
+                val userId  = call.userId()
                 val request = call.receive<CreateEntryRequest>()
-                val entry = DiaryEntry(
-                    id = UUID.randomUUID().toString(),
-                    userId = userId,
-                    title = request.title,
-                    content = request.content,
-                    mood = request.mood,
-                    createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis()
+                val now     = System.currentTimeMillis()
+                val entry   = DiaryEntry(
+                    id        = UUID.randomUUID().toString(),
+                    userId    = userId,
+                    title     = request.title,
+                    content   = request.content,
+                    mood      = request.mood,
+                    createdAt = now,
+                    updatedAt = now
                 )
                 val created = FirebaseService.createEntry(entry)
                 call.respond(HttpStatusCode.Created, ApiResponse(success = true, data = created))
             }
 
-            // Update entry — client sends whichever content to persist (original or AI-rewritten)
+            // Update an existing entry
             put("/{id}") {
-                val userId = call.userId()
-                val entryId = call.parameters["id"] ?: return@put call.respond(
-                    HttpStatusCode.BadRequest, ApiResponse<Unit>(success = false, message = "Missing entry ID")
-                )
+                val userId  = call.userId()
+                val entryId = call.requireParam("id") ?: return@put
                 val existing = FirebaseService.getEntryById(entryId, userId)
                     ?: return@put call.respond(
-                        HttpStatusCode.NotFound, ApiResponse<Unit>(success = false, message = "Entry not found")
+                        HttpStatusCode.NotFound,
+                        ApiResponse<Unit>(success = false, message = "Entry not found")
                     )
                 val request = call.receive<UpdateEntryRequest>()
                 val updated = existing.copy(
-                    title = request.title,
-                    content = request.content,
-                    mood = request.mood,
+                    title     = request.title,
+                    content   = request.content,
+                    mood      = request.mood,
                     updatedAt = System.currentTimeMillis()
                 )
                 FirebaseService.updateEntry(updated)
                 call.respond(ApiResponse(success = true, data = updated))
             }
 
-            // Delete entry
+            // Delete an entry
             delete("/{id}") {
-                val userId = call.userId()
-                val entryId = call.parameters["id"] ?: return@delete call.respond(
-                    HttpStatusCode.BadRequest, ApiResponse<Unit>(success = false, message = "Missing entry ID")
-                )
+                val userId  = call.userId()
+                val entryId = call.requireParam("id") ?: return@delete
                 val deleted = FirebaseService.deleteEntry(entryId, userId)
                 if (deleted) {
                     call.respond(ApiResponse<Unit>(success = true, message = "Entry deleted"))
@@ -98,30 +85,35 @@ fun Route.diaryRoutes(grokService: GrokAIService) {
                 }
             }
 
-            // AI Rewrite — returns rewritten text only; client decides whether to save it via PUT
+            // AI rewrite — returns enhanced text; the client decides whether to save it
             post("/ai-rewrite") {
                 val request = call.receive<AiRewriteRequest>()
-                if (request.content.isBlank()) {
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        ApiResponse<Unit>(success = false, message = "Content cannot be empty")
-                    )
-                }
+                require(request.content.isNotBlank()) { "Content cannot be empty" }
                 val rewritten = grokService.rewriteContent(request.content, request.instruction)
-                call.respond(
-                    ApiResponse(
-                        success = true,
-                        data = AiRewriteResponse(rewritten = rewritten)
-                    )
-                )
+                call.respond(ApiResponse(success = true, data = AiRewriteResponse(rewritten = rewritten)))
             }
         }
     }
 }
 
-fun ApplicationCall.userId(): String {
-    val principal = principal<JWTPrincipal>()
-        ?: throw SecurityException("Unauthorized")
-    return principal.payload.getClaim("userId").asString()
-        ?: throw SecurityException("Invalid token")
+// ── Private helpers ──
+
+/** Responds with 400 and returns null if [name] is missing from path parameters. */
+private suspend fun ApplicationCall.requireParam(name: String): String? {
+    val value = parameters[name]
+    if (value.isNullOrBlank()) {
+        respond(HttpStatusCode.BadRequest, ApiResponse<Unit>(success = false, message = "Missing parameter: $name"))
+        return null
+    }
+    return value
 }
+
+/** Maps a [DiaryEntry] to its lightweight list representation. */
+private fun DiaryEntry.toListItem() = DiaryListItem(
+    id        = id,
+    title     = title.ifBlank { "Untitled" },
+    preview   = content.take(150),
+    mood      = mood,
+    createdAt = createdAt,
+    updatedAt = updatedAt
+)

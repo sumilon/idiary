@@ -16,11 +16,13 @@ data class DiaryEntry(
     val id: String = "",
     val userId: String = "",
     val title: String = "",
-    val content: String = "",   // single source of truth — stores either user text or AI-rewritten text
+    val content: String = "",
     val mood: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+// ── Auth models ──
 
 @Serializable
 data class RegisterRequest(
@@ -36,6 +38,12 @@ data class LoginRequest(
 )
 
 @Serializable
+data class ChangePasswordRequest(
+    val currentPassword: String,
+    val newPassword: String
+)
+
+@Serializable
 data class AuthResponse(
     val token: String,
     val user: UserDTO
@@ -48,6 +56,8 @@ data class UserDTO(
     val name: String
 )
 
+// ── Diary models ──
+
 @Serializable
 data class CreateEntryRequest(
     val title: String,
@@ -58,9 +68,11 @@ data class CreateEntryRequest(
 @Serializable
 data class UpdateEntryRequest(
     val title: String,
-    val content: String,        // caller sends whichever content to persist (user or AI)
+    val content: String,
     val mood: String? = null
 )
+
+// ── AI models ──
 
 @Serializable
 data class AiRewriteRequest(
@@ -70,8 +82,10 @@ data class AiRewriteRequest(
 
 @Serializable
 data class AiRewriteResponse(
-    val rewritten: String       // only the AI result; caller decides whether to save it
+    val rewritten: String
 )
+
+// ── Generic response ──
 
 @Serializable
 data class ApiResponse<T>(
@@ -79,6 +93,8 @@ data class ApiResponse<T>(
     val data: T? = null,
     val message: String? = null
 )
+
+// ── List projection ──
 
 @Serializable
 data class DiaryListItem(

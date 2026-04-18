@@ -16,19 +16,17 @@ import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 
 class GrokAIService(config: ApplicationConfig) {
-    private val logger = LoggerFactory.getLogger(GrokAIService::class.java)
-    private val apiKey = config.property("grok.apiKey").getString()
-    private val baseUrl = config.property("grok.baseUrl").getString()
-    private val model = config.property("grok.model").getString()
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-    }
+    private val logger  = LoggerFactory.getLogger(GrokAIService::class.java)
+    private val apiKey  = config.property("grok.apiKey").getString()
+    private val baseUrl = config.property("grok.baseUrl").getString()
+    private val model   = config.property("grok.model").getString()
+
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     private val client = HttpClient(CIO) {
         install(ContentNegotiation) { json(json) }
-        install(Logging) { level = LogLevel.INFO }
+        install(Logging)            { level = LogLevel.INFO }
         install(HttpTimeout) {
             requestTimeoutMillis = 30_000
             connectTimeoutMillis = 10_000
@@ -36,55 +34,55 @@ class GrokAIService(config: ApplicationConfig) {
     }
 
     suspend fun rewriteContent(content: String, instruction: String): String {
-        val systemPrompt = """You are a helpful diary writing assistant. Your job is to help users improve their diary entries.
-Keep the personal voice and emotions of the writer intact. Make the text more readable, fix grammar,
-and improve sentence structure while maintaining the original meaning and sentiment.
-Return ONLY the improved text, nothing else - no explanations, no preamble."""
+        val systemPrompt = """
+            You are a helpful diary writing assistant. Help users improve their diary entries while
+            preserving their personal voice and emotions. Return ONLY the improved text — no
+            explanations, no preamble.
+        """.trimIndent()
 
         val userPrompt = when (instruction.lowercase()) {
-            "improve" -> "Please improve this diary entry to make it more readable and well-written:\n\n$content"
-            "grammar" -> "Please fix grammar and spelling errors in this diary entry:\n\n$content"
-            "expand"  -> "Please expand and enrich this diary entry with more detail and expression:\n\n$content"
-            "shorten" -> "Please make this diary entry more concise while keeping the key points:\n\n$content"
-            "formal"  -> "Please rewrite this diary entry in a more formal, eloquent style:\n\n$content"
-            else      -> "Please $instruction this diary entry:\n\n$content"
+            "improve"  -> "Please improve this diary entry to make it more readable and well-written:\n\n$content"
+            "grammar"  -> "Please fix grammar and spelling errors in this diary entry:\n\n$content"
+            "expand"   -> "Please expand and enrich this diary entry with more detail and expression:\n\n$content"
+            "shorten"  -> "Please make this diary entry more concise while keeping the key points:\n\n$content"
+            "formal"   -> "Please rewrite this diary entry in a more formal, eloquent style:\n\n$content"
+            else       -> "Please $instruction this diary entry:\n\n$content"
         }
 
         return try {
-            val httpResponse = client.post("$baseUrl/chat/completions") {
+            val response = client.post("$baseUrl/chat/completions") {
                 contentType(ContentType.Application.Json)
                 header("Authorization", "Bearer $apiKey")
                 setBody(
                     GrokRequest(
-                        model = model,
+                        model    = model,
                         messages = listOf(
                             GrokMessage("system", systemPrompt),
-                            GrokMessage("user", userPrompt)
-                        ),
-                        maxTokens = 2000,
-                        temperature = 0.7
+                            GrokMessage("user",   userPrompt)
+                        )
                     )
                 )
             }
 
-            val responseText = httpResponse.bodyAsText()
-
-            if (!httpResponse.status.isSuccess()) {
-                throw Exception("AI API error: ${httpResponse.status} - $responseText")
+            val body = response.bodyAsText()
+            if (!response.status.isSuccess()) {
+                throw Exception("Groq API error: ${response.status} – $body")
             }
 
-            val response: GrokResponse = json.decodeFromString(responseText)
-            response.choices?.firstOrNull()?.message?.content
+            json.decodeFromString<GrokResponse>(body)
+                .choices?.firstOrNull()?.message?.content
                 ?: throw Exception("No response from AI")
 
         } catch (e: Exception) {
-            logger.error("AI API error: ${e.message}", e)
+            logger.error("Groq API error: ${e.message}", e)
             throw Exception("AI service temporarily unavailable. Please try again.")
         }
     }
 
     fun close() = client.close()
 }
+
+// ── Groq API data classes ──
 
 @Serializable
 data class GrokRequest(

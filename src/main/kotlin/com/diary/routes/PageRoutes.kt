@@ -6,31 +6,19 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
 /**
- * Serves the standalone HTML template files from resources/templates/.
+ * Serves HTML template files from resources/templates/.
  *
- * For the entry page we inject two tiny hidden-field values
- * (entryId and isNewEntry) into the HTML so app.js knows
- * whether it is editing an existing entry or creating a new one.
- * Everything else (CSS, JS) is a normal static file.
+ * For the entry page, two hidden-field values (entryId, isNewEntry) are
+ * injected by simple string replacement so app.js knows whether it is
+ * editing an existing entry or creating a new one.
  */
 fun Route.pageRoutes() {
 
-    // Root → login
-    get("/") {
-        call.respondRedirect("/login")
-    }
-
-    get("/login") {
-        call.respondHtmlTemplate("login.html")
-    }
-
-    get("/register") {
-        call.respondHtmlTemplate("register.html")
-    }
-
-    get("/dashboard") {
-        call.respondHtmlTemplate("dashboard.html")
-    }
+    get("/")          { call.respondRedirect("/login") }
+    get("/login")     { call.respondTemplate("login.html") }
+    get("/register")  { call.respondTemplate("register.html") }
+    get("/dashboard") { call.respondTemplate("dashboard.html") }
+    get("/profile")   { call.respondTemplate("profile.html") }
 
     get("/entry/new") {
         call.respondEntryPage(entryId = "", isNew = true)
@@ -42,45 +30,36 @@ fun Route.pageRoutes() {
     }
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Helpers ──
 
-/**
- * Reads a template file from resources/templates/ and sends it as HTML.
- */
-private suspend fun ApplicationCall.respondHtmlTemplate(filename: String) {
-    val content = loadTemplate(filename)
-    respondText(content, ContentType.Text.Html)
+private suspend fun ApplicationCall.respondTemplate(filename: String) {
+    respondText(loadTemplate(filename), ContentType.Text.Html)
 }
 
 /**
- * Serves entry.html with the two hidden fields populated.
- * Simple string replacement keeps the HTML file clean without a full
- * template engine dependency.
+ * Serves entry.html with the two hidden fields populated via string replacement.
+ * This avoids a full template-engine dependency while keeping the HTML clean.
  */
 private suspend fun ApplicationCall.respondEntryPage(entryId: String, isNew: Boolean) {
     var html = loadTemplate("entry.html")
 
     html = html
         .replace(
-            """<input type="hidden" id="entryId"           value="">""",
-            """<input type="hidden" id="entryId"           value="$entryId">"""
+            """<input type="hidden" id="entryId"     value="">""",
+            """<input type="hidden" id="entryId"     value="$entryId">"""
         )
         .replace(
-            """<input type="hidden" id="isNewEntry"        value="true">""",
-            """<input type="hidden" id="isNewEntry"        value="${if (isNew) "true" else "false"}">"""
+            """<input type="hidden" id="isNewEntry"  value="true">""",
+            """<input type="hidden" id="isNewEntry"  value="${if (isNew) "true" else "false"}">"""
         )
 
     respondText(html, ContentType.Text.Html)
 }
 
-/**
- * Loads a template file from the classpath (resources/templates/).
- */
 private fun loadTemplate(filename: String): String {
-    val resource = object {}.javaClass
+    val stream = object {}.javaClass
         .classLoader
         .getResourceAsStream("templates/$filename")
         ?: error("Template not found: templates/$filename")
-
-    return resource.bufferedReader(Charsets.UTF_8).use { it.readText() }
+    return stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
 }

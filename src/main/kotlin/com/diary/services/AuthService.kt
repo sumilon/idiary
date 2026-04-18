@@ -8,55 +8,53 @@ import org.mindrot.jbcrypt.BCrypt
 import java.util.*
 
 class AuthService(config: ApplicationConfig) {
-    private val secret = config.property("jwt.secret").getString()
-    private val issuer = config.property("jwt.issuer").getString()
-    private val audience = config.property("jwt.audience").getString()
-    // HOCON integers must be read as getString() then parsed, or use the raw string path
-    private val expirationHours: Long = config.propertyOrNull("jwt.expirationHours")
-        ?.getString()?.toLongOrNull() ?: 24L
-    private val algorithm = Algorithm.HMAC256(secret)
+
+    private val secret        = config.property("jwt.secret").getString()
+    private val issuer        = config.property("jwt.issuer").getString()
+    private val audience      = config.property("jwt.audience").getString()
+    private val expirationHours = config.property("jwt.expirationHours").getString().toLong()
+    private val algorithm     = Algorithm.HMAC256(secret)
+
+    // ── Password helpers ──
 
     fun hashPassword(password: String): String = BCrypt.hashpw(password, BCrypt.gensalt(10))
 
-    fun verifyPassword(password: String, hash: String): Boolean = BCrypt.checkpw(password, hash)
+    fun verifyPassword(raw: String, hash: String): Boolean = BCrypt.checkpw(raw, hash)
 
-    fun generateToken(user: User): String {
-        return JWT.create()
+    // ── Token generation ──
+
+    fun generateToken(user: User): String =
+        JWT.create()
             .withAudience(audience)
             .withIssuer(issuer)
             .withClaim("userId", user.id)
             .withClaim("email", user.email)
-            .withExpiresAt(Date(System.currentTimeMillis() + expirationHours * 3600 * 1000))
+            .withExpiresAt(Date(System.currentTimeMillis() + expirationHours * 3_600_000))
             .sign(algorithm)
-    }
+
+    // ── Auth operations ──
 
     suspend fun register(request: RegisterRequest): AuthResponse {
-        if (request.email.isBlank() || request.password.isBlank() || request.name.isBlank()) {
-            throw IllegalArgumentException("All fields are required")
+        require(request.email.isNotBlank() && request.password.isNotBlank() && request.name.isNotBlank()) {
+            "All fields are required"
         }
-        if (request.password.length < 6) {
-            throw IllegalArgumentException("Password must be at least 6 characters")
-        }
-        if (!request.email.contains("@")) {
-            throw IllegalArgumentException("Invalid email address")
-        }
+        require(request.password.length >= 6) { "Password must be at least 6 characters" }
+        require(request.email.contains("@"))  { "Invalid email address" }
 
-        val existing = FirebaseService.getUserByEmail(request.email.lowercase())
-        if (existing != null) {
+        if (FirebaseService.getUserByEmail(request.email.lowercase()) != null) {
             throw IllegalArgumentException("Email already registered")
         }
 
         val user = User(
-            id = UUID.randomUUID().toString(),
-            email = request.email.lowercase().trim(),
-            name = request.name.trim(),
+            id           = UUID.randomUUID().toString(),
+            email        = request.email.lowercase().trim(),
+            name         = request.name.trim(),
             passwordHash = hashPassword(request.password),
-            createdAt = System.currentTimeMillis()
+            createdAt    = System.currentTimeMillis()
         )
 
         FirebaseService.createUser(user)
-        val token = generateToken(user)
-        return AuthResponse(token = token, user = UserDTO(user.id, user.email, user.name))
+        return AuthResponse(generateToken(user), UserDTO(user.id, user.email, user.name))
     }
 
     suspend fun login(request: LoginRequest): AuthResponse {
@@ -67,7 +65,23 @@ class AuthService(config: ApplicationConfig) {
             throw IllegalArgumentException("Invalid email or password")
         }
 
-        val token = generateToken(user)
-        return AuthResponse(token = token, user = UserDTO(user.id, user.email, user.name))
+        return AuthResponse(generateToken(user), UserDTO(user.id, user.email, user.name))
+    }
+
+    suspend fun changePassword(userId: String, request: ChangePasswordRequest): Unit {
+        require(request.currentPassword.isNotBlank()) { "Current password is required" }
+        require(request.newPassword.length >= 6)      { "New password must be at least 6 characters" }
+        require(request.currentPassword != request.newPassword) {
+            "New password must differ from current password"
+        }
+
+        val user = FirebaseService.getUserById(userId)
+            ?: throw NoSuchElementException("User not found")
+
+        if (!verifyPassword(request.currentPassword, user.passwordHash)) {
+            throw SecurityException("Current password is incorrect")
+        }
+
+        FirebaseService.updatePasswordHash(userId, hashPassword(request.newPassword))
     }
 }

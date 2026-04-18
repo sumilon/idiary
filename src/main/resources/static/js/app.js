@@ -1,16 +1,24 @@
-/* ── Memoiré – Main JavaScript ── */
+/* ── Inkwell – Main JavaScript ── */
 
-// ── Auth helpers ──
-const TOKEN_KEY = 'memoir_token';
-const USER_KEY  = 'memoir_user';
+// ── Auth storage ──
+// Supports both key names (memoir_ was original; inkwell_ was used in an intermediate build).
+// On first load we migrate any inkwell_ keys to memoir_ so existing sessions survive.
+const TOKEN_KEY    = 'memoir_token';
+const USER_KEY     = 'memoir_user';
+const TOKEN_KEY_OLD = 'inkwell_token';
+const USER_KEY_OLD  = 'inkwell_user';
 
-function getToken()   { return localStorage.getItem(TOKEN_KEY); }
-function getUser()    { try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; } }
-function setAuth(token, user) {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
-}
-function clearAuth()  { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); }
+(function migrateAuthKeys() {
+  const oldToken = localStorage.getItem(TOKEN_KEY_OLD);
+  const oldUser  = localStorage.getItem(USER_KEY_OLD);
+  if (oldToken) { localStorage.setItem(TOKEN_KEY, oldToken); localStorage.removeItem(TOKEN_KEY_OLD); }
+  if (oldUser)  { localStorage.setItem(USER_KEY,  oldUser);  localStorage.removeItem(USER_KEY_OLD); }
+})();
+
+const getToken  = ()     => localStorage.getItem(TOKEN_KEY);
+const getUser   = ()     => { try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; } };
+const setAuth   = (t, u) => { localStorage.setItem(TOKEN_KEY, t); localStorage.setItem(USER_KEY, JSON.stringify(u)); };
+const clearAuth = ()     => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); };
 
 function requireAuth() {
   if (!getToken()) { window.location.href = '/login'; return false; }
@@ -28,30 +36,23 @@ async function api(method, path, body) {
   const token = getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined
-  });
-
+  const res  = await fetch(`/api${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
   const data = await res.json();
 
-  if (res.status === 401) {
-    clearAuth();
-    window.location.href = '/login';
-    throw new Error('Session expired');
-  }
-
+  if (res.status === 401) { clearAuth(); window.location.href = '/login'; throw new Error('Session expired'); }
   if (!data.success && data.message) throw new Error(data.message);
-  if (!res.ok && !data.success) throw new Error('Request failed');
+  if (!res.ok && !data.success)      throw new Error('Request failed');
 
   return data.data ?? data;
 }
 
-// ── Date helpers ──
+// ── Utility helpers ──
 function formatDate(ts) {
-  const d = new Date(ts);
-  return d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(ts).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function formatTime(ts) {
+  return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
 function greet() {
@@ -61,20 +62,36 @@ function greet() {
   return 'Good evening';
 }
 
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+
+function moodEmoji(mood) {
+  const map = { happy: '😊', sad: '😔', excited: '🤩', calm: '😌', anxious: '😰', angry: '😤', grateful: '🙏' };
+  return map[mood] || '';
+}
+
+function moodLabel(mood) {
+  if (!mood) return '';
+  return mood.charAt(0).toUpperCase() + mood.slice(1);
+}
+
 // ── Auth pages ──
 
 async function handleLogin(e) {
   e.preventDefault();
-  const btn = document.getElementById('loginBtn');
+  const btn   = document.getElementById('loginBtn');
   const errEl = document.getElementById('loginError');
   errEl.classList.add('hidden');
   btn.disabled = true;
-  btn.querySelector('.btn-text').textContent = 'Signing in...';
+  btn.querySelector('.btn-text').textContent = 'Signing in…';
 
   try {
     const data = await api('POST', '/auth/login', {
-      email: document.getElementById('email').value,
-      password: document.getElementById('password').value
+      email:    document.getElementById('email').value,
+      password: document.getElementById('password').value,
     });
     setAuth(data.token, data.user);
     window.location.href = '/dashboard';
@@ -88,17 +105,17 @@ async function handleLogin(e) {
 
 async function handleRegister(e) {
   e.preventDefault();
-  const btn = document.getElementById('registerBtn');
+  const btn   = document.getElementById('registerBtn');
   const errEl = document.getElementById('registerError');
   errEl.classList.add('hidden');
   btn.disabled = true;
-  btn.querySelector('.btn-text').textContent = 'Creating account...';
+  btn.querySelector('.btn-text').textContent = 'Creating account…';
 
   try {
     const data = await api('POST', '/auth/register', {
-      name: document.getElementById('name').value,
-      email: document.getElementById('email').value,
-      password: document.getElementById('password').value
+      name:     document.getElementById('name').value,
+      email:    document.getElementById('email').value,
+      password: document.getElementById('password').value,
     });
     setAuth(data.token, data.user);
     window.location.href = '/dashboard';
@@ -112,17 +129,25 @@ async function handleRegister(e) {
 
 // ── Dashboard ──
 
+const PAGE_SIZE = 10;
+
+let allEntries     = [];
+let filteredEntries = [];
+let currentPage    = 1;
+
 async function initDashboard() {
   if (!requireAuth()) return;
 
-  const user = getUser();
+  const user     = getUser();
   const greeting = document.getElementById('headerGreeting');
   const title    = document.getElementById('dashboardTitle');
   const dateEl   = document.getElementById('dashboardDate');
 
   if (greeting) greeting.textContent = user?.name || '';
-  if (title)    title.textContent = `${greet()}, ${user?.name?.split(' ')[0] || 'there'}`;
-  if (dateEl)   dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  if (title)    title.textContent    = `${greet()}, ${user?.name?.split(' ')[0] || 'there'}`;
+  if (dateEl)   dateEl.textContent   = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
 
   await loadEntries();
 }
@@ -132,41 +157,134 @@ async function loadEntries() {
   if (!container) return;
 
   try {
-    const entries = await api('GET', '/diary');
-    renderEntries(container, entries);
+    allEntries      = await api('GET', '/diary');
+    filteredEntries = allEntries;
+    currentPage     = 1;
+    renderPage();
   } catch (err) {
-    container.innerHTML = `<div class="empty-state">
-      <div class="empty-state-icon">⚠️</div>
+    container.innerHTML = `<div class="state-center">
+      <div class="state-icon">⚠️</div>
       <h3>Couldn't load entries</h3>
-      <p>${err.message}</p>
+      <p>${escapeHtml(err.message)}</p>
     </div>`;
   }
 }
 
-function renderEntries(container, entries) {
-  if (!entries || entries.length === 0) {
-    container.innerHTML = `<div class="empty-state">
-      <div class="empty-state-icon">📖</div>
+function filterEntries(query) {
+  const q = query.toLowerCase().trim();
+  filteredEntries = q
+    ? allEntries.filter(e =>
+        (e.title   || '').toLowerCase().includes(q) ||
+        (e.preview || '').toLowerCase().includes(q)
+      )
+    : allEntries;
+  currentPage = 1;
+  renderPage();
+}
+
+function renderPage() {
+  const container  = document.getElementById('entriesContainer');
+  const pagBar     = document.getElementById('paginationBar');
+  const countEl    = document.getElementById('entryCount');
+  if (!container) return;
+
+  const total      = filteredEntries.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const start      = (currentPage - 1) * PAGE_SIZE;
+  const pageItems  = filteredEntries.slice(start, start + PAGE_SIZE);
+
+  // Entry count label
+  if (countEl) {
+    countEl.textContent = total === 0 ? '' :
+      total === 1 ? '1 entry' : `${total} entries`;
+  }
+
+  if (total === 0) {
+    container.innerHTML = `<div class="state-center">
+      <div class="state-icon">📖</div>
       <h3>Your diary awaits</h3>
       <p>Start capturing your thoughts and memories.</p>
-      <a href="/entry/new" class="btn-new">Write your first entry</a>
+      <a href="/entry/new" class="btn-new-entry" style="margin-top:0.5rem">Write your first entry</a>
     </div>`;
+    if (pagBar) pagBar.classList.add('hidden');
     return;
   }
 
-  container.innerHTML = entries.map((entry, i) => `
-    <a href="/entry/${entry.id}" class="entry-card" style="animation-delay:${i * 0.05}s">
-      ${entry.mood ? `<div class="card-mood">${moodEmoji(entry.mood)}</div>` : ''}
-      <div class="card-title">${escapeHtml(entry.title || 'Untitled')}</div>
-      <div class="card-preview">${escapeHtml(entry.preview || '')}</div>
-      <div class="card-footer">
-        <span class="card-date">${formatDate(entry.createdAt)}</span>
-        <div class="card-actions">
-          <button class="card-delete-btn" onclick="deleteEntry(event, '${entry.id}')" title="Delete">🗑</button>
-        </div>
+  // Render list rows
+  container.innerHTML = pageItems.map((entry, i) => `
+    <a href="/entry/${entry.id}" class="entry-row" style="animation-delay:${i * 0.04}s">
+      <div class="entry-row-left">
+        ${entry.mood ? `<div class="row-mood" title="${moodLabel(entry.mood)}">${moodEmoji(entry.mood)}</div>` : '<div class="row-mood-placeholder"></div>'}
+      </div>
+      <div class="entry-row-body">
+        <div class="row-title">${escapeHtml(entry.title || 'Untitled')}</div>
+        <div class="row-preview">${escapeHtml(entry.preview || '')}</div>
+      </div>
+      <div class="entry-row-meta">
+        <span class="row-date">${formatDate(entry.createdAt)}</span>
+        <span class="row-time">${formatTime(entry.createdAt)}</span>
+        ${entry.mood ? `<span class="row-mood-badge">${moodLabel(entry.mood)}</span>` : ''}
+      </div>
+      <div class="entry-row-actions">
+        <button class="row-del-btn" onclick="deleteEntry(event,'${entry.id}')" title="Delete entry">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
+            <path d="M9 6V4h6v2"/>
+          </svg>
+        </button>
       </div>
     </a>
   `).join('');
+
+  // Pagination bar
+  if (!pagBar) return;
+  if (totalPages <= 1) {
+    pagBar.classList.add('hidden');
+    return;
+  }
+
+  pagBar.classList.remove('hidden');
+  const rangeStart = start + 1;
+  const rangeEnd   = Math.min(start + PAGE_SIZE, total);
+
+  pagBar.innerHTML = `
+    <span class="pag-info">${rangeStart}–${rangeEnd} of ${total}</span>
+    <div class="pag-btns">
+      <button class="pag-btn" onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} title="Previous page">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+      ${buildPageNumbers(currentPage, totalPages)}
+      <button class="pag-btn" onclick="goPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} title="Next page">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+    </div>
+  `;
+}
+
+function buildPageNumbers(current, total) {
+  const pages = [];
+  // Always show first, last, current ±1, with ellipsis
+  const show = new Set([1, total, current, current - 1, current + 1].filter(p => p >= 1 && p <= total));
+  const sorted = [...show].sort((a, b) => a - b);
+
+  let prev = 0;
+  for (const p of sorted) {
+    if (prev && p - prev > 1) pages.push('<span class="pag-ellipsis">…</span>');
+    pages.push(`<button class="pag-btn pag-num ${p === current ? 'active' : ''}" onclick="goPage(${p})">${p}</button>`);
+    prev = p;
+  }
+  return pages.join('');
+}
+
+function goPage(page) {
+  currentPage = page;
+  renderPage();
+  document.querySelector('.dashboard-body')?.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function deleteEntry(e, id) {
@@ -181,11 +299,6 @@ async function deleteEntry(e, id) {
   }
 }
 
-function moodEmoji(mood) {
-  const map = { happy:'😊', sad:'😔', excited:'🤩', calm:'😌', anxious:'😰', angry:'😤', grateful:'🙏' };
-  return map[mood] || '';
-}
-
 // ── Entry page ──
 
 let currentEntry = null;
@@ -193,11 +306,15 @@ let currentEntry = null;
 async function initEntryPage() {
   if (!requireAuth()) return;
 
-  const entryId  = document.getElementById('entryId')?.value;
-  const isNew    = document.getElementById('isNewEntry')?.value === 'true';
-  const dateEl   = document.getElementById('entryDate');
+  const entryIdEl  = document.getElementById('entryId');
+  const isNewEl    = document.getElementById('isNewEntry');
+  const entryId    = entryIdEl?.value?.trim() || '';
+  const isNew      = (isNewEl?.value ?? 'true') === 'true';
+  const dateEl     = document.getElementById('entryDate');
 
-  if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
 
   // Mood picker
   document.querySelectorAll('.mood-btn').forEach(btn => {
@@ -214,69 +331,66 @@ async function initEntryPage() {
 }
 
 async function loadEntry(id) {
+  const titleEl   = document.getElementById('entryTitle');
+  const contentEl = document.getElementById('entryContent');
+
+  // Show loading state
+  if (titleEl)   titleEl.placeholder   = 'Loading…';
+  if (contentEl) contentEl.placeholder = 'Loading entry…';
+
   try {
     const entry = await api('GET', `/diary/${id}`);
     currentEntry = entry;
 
-    document.getElementById('entryTitle').value   = entry.title || '';
-    document.getElementById('entryContent').value = entry.content || '';
+    if (titleEl)   titleEl.value   = entry.title   || '';
+    if (contentEl) contentEl.value = entry.content || '';
 
     if (entry.mood) {
-      document.getElementById('selectedMood').value = entry.mood;
+      const moodInput = document.getElementById('selectedMood');
+      if (moodInput) moodInput.value = entry.mood;
       document.querySelectorAll('.mood-btn').forEach(b => {
         if (b.dataset.mood === entry.mood) b.classList.add('selected');
       });
     }
-
-    if (entry.aiContent) {
-      document.getElementById('aiGeneratedContent').value = entry.aiContent;
-      document.getElementById('usingAiContent').value = String(entry.usedAiContent);
-      if (entry.usedAiContent) showAiPanel(entry.aiContent);
-    }
   } catch (err) {
-    showSaveStatus('Failed to load entry: ' + err.message, 'error');
+    const msg = 'Failed to load entry: ' + (err.message || 'Unknown error');
+    if (titleEl)   titleEl.placeholder   = 'Give your entry a title…';
+    if (contentEl) contentEl.placeholder = 'What\'s on your mind today?\n\nWrite freely — your thoughts, feelings, experiences…';
+    showSaveStatus(msg, 'error');
+    console.error('[loadEntry]', err);
   }
 }
 
 async function rewriteWithAI() {
   const content = document.getElementById('entryContent').value.trim();
-  if (!content) {
-    showAiError('Please write something before using AI enhancement.');
-    return;
-  }
+  if (!content) { showAiError('Please write something before using AI enhancement.'); return; }
 
-  const btn = document.getElementById('aiBtn');
+  const btn         = document.getElementById('aiBtn');
   const instruction = document.getElementById('aiInstruction').value;
-  const errEl = document.getElementById('aiError');
-  errEl.classList.add('hidden');
+  document.getElementById('aiError').classList.add('hidden');
 
   btn.disabled = true;
-  btn.innerHTML = `<span class="loading-spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:6px"></span>Enhancing...`;
+  btn.innerHTML = `<span class="spinner" style="width:13px;height:13px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:5px"></span>Enhancing…`;
 
   try {
     const result = await api('POST', '/diary/ai-rewrite', { content, instruction });
     document.getElementById('aiGeneratedContent').value = result.rewritten;
-    document.getElementById('usingAiContent').value = 'false';
+    document.getElementById('usingAiContent').value     = 'false';
     showAiPanel(result.rewritten);
   } catch (err) {
     showAiError(err.message || 'AI enhancement failed. Please try again.');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Enhance with AI`;
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Enhance with AI`;
   }
 }
 
 function showAiPanel(content) {
   const aiPanel = document.getElementById('aiPanel');
   const panels  = document.getElementById('editorPanels');
-  const display = document.getElementById('aiContent');
-
-  display.textContent = content;
+  document.getElementById('aiContent').textContent = content;
   aiPanel.classList.remove('hidden');
-
-  if (window.innerWidth >= 900) {
-    panels.classList.add('split');
-  }
+  if (window.innerWidth >= 900) panels.classList.add('split');
 }
 
 function hideAiPanel() {
@@ -285,8 +399,7 @@ function hideAiPanel() {
 }
 
 function useAiContent() {
-  const aiContent = document.getElementById('aiGeneratedContent').value;
-  document.getElementById('entryContent').value = aiContent;
+  document.getElementById('entryContent').value = document.getElementById('aiGeneratedContent').value;
   document.getElementById('usingAiContent').value = 'true';
   hideAiPanel();
   showSaveStatus('AI content applied! Remember to save.', 'success');
@@ -305,57 +418,32 @@ function showAiError(msg) {
 }
 
 async function saveEntry() {
-  const entryId  = document.getElementById('entryId').value;
-  const isNew    = document.getElementById('isNewEntry').value === 'true';
-  const title    = document.getElementById('entryTitle').value.trim();
-  const content  = document.getElementById('entryContent').value.trim();
-  const mood     = document.getElementById('selectedMood').value || null;
-  const aiContent = document.getElementById('aiGeneratedContent').value || null;
-  const usingAi  = document.getElementById('usingAiContent').value === 'true';
-  const btn      = document.getElementById('saveBtn');
+  const entryId = document.getElementById('entryId').value;
+  const isNew   = document.getElementById('isNewEntry').value === 'true';
+  const title   = document.getElementById('entryTitle').value.trim();
+  const content = document.getElementById('entryContent').value.trim();
+  const mood    = document.getElementById('selectedMood').value || null;
+  const btn     = document.getElementById('saveBtn');
 
-  if (!content) {
-    showSaveStatus('Please write something before saving.', 'error');
-    return;
-  }
+  if (!content) { showSaveStatus('Please write something before saving.', 'error'); return; }
 
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
 
   try {
     if (isNew) {
-      const created = await api('POST', '/diary', {
-        title: title || 'Untitled',
-        content,
-        mood
-      });
-      // If AI content exists, update with it
-      if (aiContent) {
-        await api('PUT', `/diary/${created.id}`, {
-          title: title || 'Untitled',
-          content,
-          aiContent,
-          usedAiContent: usingAi,
-          mood
-        });
-      }
+      await api('POST', '/diary', { title: title || 'Untitled', content, mood });
       showSaveStatus('Entry saved!', 'success');
       setTimeout(() => { window.location.href = '/dashboard'; }, 800);
     } else {
-      await api('PUT', `/diary/${entryId}`, {
-        title: title || 'Untitled',
-        content,
-        aiContent,
-        usedAiContent: usingAi,
-        mood
-      });
+      await api('PUT', `/diary/${entryId}`, { title: title || 'Untitled', content, mood });
       showSaveStatus('Entry updated!', 'success');
     }
   } catch (err) {
     showSaveStatus('Save failed: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save`;
+    btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save`;
   }
 }
 
@@ -363,18 +451,66 @@ function showSaveStatus(msg, type) {
   const el = document.getElementById('saveStatus');
   if (!el) return;
   el.textContent = msg;
-  el.className = `save-status ${type}`;
+  el.className   = `save-toast ${type === 'success' ? 'ok' : 'err'}`;
   el.classList.remove('hidden');
   setTimeout(() => el.classList.add('hidden'), 3000);
 }
 
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.appendChild(document.createTextNode(str));
-  return div.innerHTML;
+// ── Profile page ──
+
+function initProfilePage() {
+  if (!requireAuth()) return;
+
+  const user = getUser();
+  if (!user) return;
+
+  const nameEl   = document.getElementById('profileName');
+  const emailEl  = document.getElementById('profileEmail');
+  const avatarEl = document.getElementById('profileAvatar');
+
+  if (nameEl)   nameEl.textContent  = user.name  || '–';
+  if (emailEl)  emailEl.textContent = user.email || '–';
+  if (avatarEl) avatarEl.textContent = (user.name || '?').charAt(0).toUpperCase();
 }
 
-// ── Auto-redirect logged in users from auth pages ──
+async function handleChangePassword(e) {
+  e.preventDefault();
+
+  const btn       = document.getElementById('changePasswordBtn');
+  const errEl     = document.getElementById('passwordError');
+  const successEl = document.getElementById('passwordSuccess');
+
+  errEl.classList.add('hidden');
+  successEl.classList.add('hidden');
+
+  const currentPassword = document.getElementById('currentPassword').value;
+  const newPassword     = document.getElementById('newPassword').value;
+  const confirmPassword = document.getElementById('confirmPassword').value;
+
+  if (newPassword !== confirmPassword) {
+    errEl.textContent = 'New passwords do not match.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.querySelector('.btn-text').textContent = 'Updating…';
+
+  try {
+    await api('POST', '/auth/change-password', { currentPassword, newPassword });
+    successEl.textContent = 'Password updated successfully!';
+    successEl.classList.remove('hidden');
+    document.getElementById('changePasswordForm').reset();
+  } catch (err) {
+    errEl.textContent = err.message || 'Failed to change password. Please try again.';
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.querySelector('.btn-text').textContent = 'Update Password';
+  }
+}
+
+// ── Auto-redirect logged-in users from auth pages ──
 function redirectIfLoggedIn() {
   if (getToken()) window.location.href = '/dashboard';
 }
@@ -388,4 +524,6 @@ if (path === '/login' || path === '/register') {
   document.addEventListener('DOMContentLoaded', initDashboard);
 } else if (path.startsWith('/entry')) {
   document.addEventListener('DOMContentLoaded', initEntryPage);
+} else if (path === '/profile') {
+  document.addEventListener('DOMContentLoaded', initProfilePage);
 }
