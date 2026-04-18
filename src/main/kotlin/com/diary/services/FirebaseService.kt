@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayInputStream
+import java.io.FileInputStream
 
 object FirebaseService {
     private val logger = LoggerFactory.getLogger(FirebaseService::class.java)
