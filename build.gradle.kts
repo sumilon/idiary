@@ -2,7 +2,6 @@ plugins {
     kotlin("jvm") version "1.9.23"
     kotlin("plugin.serialization") version "1.9.23"
     id("io.ktor.plugin") version "2.3.10"
-    id("com.github.johnrengelman.shadow") version "8.1.1"
     application
 }
 
@@ -17,6 +16,12 @@ application {
         "-XX:+UseG1GC",
         "-XX:MaxGCPauseMillis=100"
     )
+}
+
+ktor {
+    fatJar {
+        archiveFileName.set("diary-app.jar")
+    }
 }
 
 repositories {
@@ -44,7 +49,7 @@ dependencies {
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-rate-limit:$ktorVersion")
 
-    // Ktor Client (for Grok/Groq API calls)
+    // Ktor Client (for Groq API calls)
     implementation("io.ktor:ktor-client-core-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-cio-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-content-negotiation-jvm:$ktorVersion")
@@ -68,22 +73,6 @@ dependencies {
 
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
-}
-
-tasks {
-    shadowJar {
-        archiveBaseName.set("diary-app")
-        archiveClassifier.set("")
-        archiveVersion.set("")
-        mergeServiceFiles()
-        manifest {
-            attributes["Main-Class"] = "com.diary.ApplicationKt"
-        }
-    }
-
-    build {
-        dependsOn(shadowJar)
-    }
 }
 
 kotlin {
