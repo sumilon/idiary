@@ -11,7 +11,9 @@ class AuthService(config: ApplicationConfig) {
     private val secret = config.property("jwt.secret").getString()
     private val issuer = config.property("jwt.issuer").getString()
     private val audience = config.property("jwt.audience").getString()
-    private val expirationHours = config.property("jwt.expirationHours").getString().toLong()
+    // HOCON integers must be read as getString() then parsed, or use the raw string path
+    private val expirationHours: Long = config.propertyOrNull("jwt.expirationHours")
+        ?.getString()?.toLongOrNull() ?: 24L
     private val algorithm = Algorithm.HMAC256(secret)
 
     fun hashPassword(password: String): String = BCrypt.hashpw(password, BCrypt.gensalt(10))
