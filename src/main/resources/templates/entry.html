@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0F1B2D">
+    <title>Diary Entry – Inkwell</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230F1B2D'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-family='Georgia,serif' font-size='20' font-weight='700' fill='%23E8A32E'%3EI%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<div class="app-shell">
+
+    <!-- ── Header ── -->
+    <header class="app-header">
+        <div class="header-row">
+            <a href="/dashboard" class="btn-back">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                Back
+            </a>
+            <a href="/dashboard" class="h-brand">
+                <div class="h-brand-mark">I</div>
+                <span class="h-brand-name">Inkwell</span>
+            </a>
+            <div class="h-right">
+                <button class="btn btn-accent-save" id="saveBtn" onclick="saveEntry()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                    Save
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ── Editor ── -->
+    <main class="entry-body">
+
+        <!-- Date + mood bar -->
+        <div class="meta-bar">
+            <div class="meta-date" id="entryDate"></div>
+            <div class="mood-row">
+                <span class="mood-lbl">Mood</span>
+                <div class="moods">
+                    <button class="mood-btn" data-mood="happy"    title="Happy">😊</button>
+                    <button class="mood-btn" data-mood="sad"      title="Sad">😔</button>
+                    <button class="mood-btn" data-mood="excited"  title="Excited">🤩</button>
+                    <button class="mood-btn" data-mood="calm"     title="Calm">😌</button>
+                    <button class="mood-btn" data-mood="anxious"  title="Anxious">😰</button>
+                    <button class="mood-btn" data-mood="angry"    title="Angry">😤</button>
+                    <button class="mood-btn" data-mood="grateful" title="Grateful">🙏</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Editor -->
+        <div class="editor-wrap">
+
+            <input type="text" id="entryTitle" class="entry-title-input"
+                   placeholder="Give your entry a title…" maxlength="100">
+
+            <!-- AI toolbar — sits above the writing area -->
+            <div class="ai-bar">
+                <span class="ai-bar-lbl">✦ AI Assistant</span>
+                <div class="ai-controls">
+                    <select id="aiInstruction" class="ai-select">
+                        <option value="improve">✨ Improve writing</option>
+                        <option value="grammar">📝 Fix grammar</option>
+                        <option value="expand">🌱 Expand details</option>
+                        <option value="shorten">✂️ Make concise</option>
+                        <option value="formal">🎩 Make formal</option>
+                    </select>
+                    <button class="btn-ai-enhance" id="aiBtn" onclick="rewriteWithAI()">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                        Enhance
+                    </button>
+                </div>
+            </div>
+
+            <div id="aiError" class="ai-err hidden"></div>
+
+            <!-- Text panels -->
+            <div class="panels" id="editorPanels">
+                <div class="panel" id="originalPanel">
+                    <div class="panel-lbl">Your writing</div>
+                    <textarea id="entryContent" class="content-ta"
+                              placeholder="What's on your mind today?&#10;&#10;Write freely — your thoughts, feelings, experiences…"></textarea>
+                </div>
+
+                <div class="panel ai-panel hidden" id="aiPanel">
+                    <div class="panel-lbl">
+                        <span class="ai-badge">✦ AI Enhanced</span>
+                    </div>
+                    <div id="aiContent" class="ai-display"></div>
+                    <div class="ai-btns">
+                        <button class="btn-use-ai"    onclick="useAiContent()">Use this version</button>
+                        <button class="btn-keep-orig" onclick="keepOriginal()">Keep original</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="saveStatus" class="save-toast hidden"></div>
+    </main>
+</div>
+
+<!-- Server-injected hidden fields -->
+<input type="hidden" id="entryId"     value="">
+<input type="hidden" id="isNewEntry"  value="true">
+<input type="hidden" id="selectedMood"       value="">
+<input type="hidden" id="aiGeneratedContent" value="">
+<input type="hidden" id="usingAiContent"     value="false">
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
