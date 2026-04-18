@@ -1,13 +1,12 @@
 package com.diary.services
 
 import io.ktor.client.*
-import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
-import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.config.*
@@ -38,7 +37,7 @@ class GrokAIService(config: ApplicationConfig) {
 
     suspend fun rewriteContent(content: String, instruction: String): String {
         val systemPrompt = """You are a helpful diary writing assistant. Your job is to help users improve their diary entries.
-Keep the personal voice and emotions of the writer intact. Make the text more readable, fix grammar, 
+Keep the personal voice and emotions of the writer intact. Make the text more readable, fix grammar,
 and improve sentence structure while maintaining the original meaning and sentiment.
 Return ONLY the improved text, nothing else - no explanations, no preamble."""
 
@@ -71,7 +70,7 @@ Return ONLY the improved text, nothing else - no explanations, no preamble."""
             val responseText = httpResponse.bodyAsText()
 
             if (!httpResponse.status.isSuccess()) {
-                throw Exception("Groq API error: ${httpResponse.status} - $responseText")
+                throw Exception("AI API error: ${httpResponse.status} - $responseText")
             }
 
             val response: GrokResponse = json.decodeFromString(responseText)
@@ -79,7 +78,7 @@ Return ONLY the improved text, nothing else - no explanations, no preamble."""
                 ?: throw Exception("No response from AI")
 
         } catch (e: Exception) {
-            logger.error("Groq API error: ${e.message}", e)
+            logger.error("AI API error: ${e.message}", e)
             throw Exception("AI service temporarily unavailable. Please try again.")
         }
     }
@@ -91,11 +90,9 @@ Return ONLY the improved text, nothing else - no explanations, no preamble."""
 data class GrokRequest(
     val model: String,
     val messages: List<GrokMessage>,
-    @SerialName("max_tokens")
-    val maxTokens: Int = 2000,
+    @SerialName("max_tokens") val maxTokens: Int = 2000,
     val temperature: Double = 0.7
-) {
-}
+)
 
 @Serializable
 data class GrokMessage(
@@ -105,15 +102,12 @@ data class GrokMessage(
 
 @Serializable
 data class GrokResponse(
-//    val choices: List<GrokChoice>
     val choices: List<GrokChoice>? = null
-
 )
 
 @Serializable
 data class GrokChoice(
     val message: GrokMessage,
     val index: Int = 0,
-    @SerialName("finish_reason")
-    val finishReason: String? = null
+    @SerialName("finish_reason") val finishReason: String? = null
 )

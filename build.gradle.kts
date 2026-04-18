@@ -1,9 +1,8 @@
-import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-
 plugins {
     kotlin("jvm") version "1.9.23"
     kotlin("plugin.serialization") version "1.9.23"
     id("io.ktor.plugin") version "2.3.10"
+    id("com.github.johnrengelman.shadow") version "8.1.1"
     application
 }
 
@@ -45,7 +44,7 @@ dependencies {
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-rate-limit:$ktorVersion")
 
-    // Ktor Client (for Grok API calls)
+    // Ktor Client (for Grok/Groq API calls)
     implementation("io.ktor:ktor-client-core-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-cio-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-content-negotiation-jvm:$ktorVersion")
@@ -72,7 +71,7 @@ dependencies {
 }
 
 tasks {
-    named<ShadowJar>("shadowJar") {
+    shadowJar {
         archiveBaseName.set("diary-app")
         archiveClassifier.set("")
         archiveVersion.set("")
@@ -83,7 +82,7 @@ tasks {
     }
 
     build {
-        dependsOn(named("shadowJar"))
+        dependsOn(shadowJar)
     }
 }
 
