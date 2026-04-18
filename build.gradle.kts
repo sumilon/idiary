@@ -1,7 +1,7 @@
 plugins {
     kotlin("jvm") version "1.9.23"
     kotlin("plugin.serialization") version "1.9.23"
-    id("io.ktor.plugin") version "2.3.10"
+    id("com.github.johnrengelman.shadow") version "7.1.2"
     application
 }
 
@@ -16,12 +16,6 @@ application {
         "-XX:+UseG1GC",
         "-XX:MaxGCPauseMillis=100"
     )
-}
-
-ktor {
-    fatJar {
-        archiveFileName.set("diary-app.jar")
-    }
 }
 
 repositories {
@@ -73,6 +67,25 @@ dependencies {
 
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktorVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
+}
+
+tasks {
+    shadowJar {
+        archiveBaseName.set("diary-app")
+        archiveClassifier.set("")
+        archiveVersion.set("")
+        // Critical: merges META-INF/services/* files instead of overwriting them.
+        // Without this, gRPC (used by Firebase) loses its service provider
+        // registrations and throws "Could not find policy 'pick_first'" at runtime.
+        mergeServiceFiles()
+        manifest {
+            attributes["Main-Class"] = "com.diary.ApplicationKt"
+        }
+    }
+
+    build {
+        dependsOn(shadowJar)
+    }
 }
 
 kotlin {
