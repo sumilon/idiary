@@ -9,26 +9,29 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 
 fun main() {
+    // Fail fast with clear messages if required env vars are missing
+    requireEnv("JWT_SECRET")
+    requireEnv("FIREBASE_PROJECT_ID")
+
     embeddedServer(Netty, port = System.getenv("PORT")?.toInt() ?: 8080) {
         module()
     }.start(wait = true)
 }
 
+private fun requireEnv(name: String) {
+    require(!System.getenv(name).isNullOrBlank()) {
+        "Required environment variable '$name' is not set. Cannot start."
+    }
+}
+
 fun Application.module() {
 
     val config = HoconApplicationConfig(ConfigFactory.load())
-
-    val projectId = config
-        .propertyOrNull("firebase.projectId")
-        ?.getString()
-
-    println("Project ID = $projectId")
-
-    FirebaseService.initialize(config)
+    val repo   = FirebaseService(config)
 
     configureSecurity(config)
     configureSerialization()
     configureCompression()
     configureStatusPages()
-    configureRouting(config)
+    configureRouting(config, repo)
 }

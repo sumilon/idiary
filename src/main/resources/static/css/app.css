@@ -6,7 +6,6 @@
    Fonts    : Cormorant Garamond (display) + Plus Jakarta Sans (UI)
    ═══════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;1,400&display=swap');
 
 /* ── Design tokens ── */
 :root {
@@ -1252,10 +1251,51 @@ body {
   box-shadow: 0 2px 8px rgba(192,57,43,0.15);
 }
 
-/* ════════════════════════════════════════════
-   UTILITIES
-   ════════════════════════════════════════════ */
-.hidden { display: none !important; }
+/* ── Stats row (dashboard & profile) ── */
+.stats-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.stat-chip {
+  background: var(--cream-2);
+  border: 1px solid var(--border-2);
+  border-radius: 2rem;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+
+/* ── Mood filter select in search-wrap ── */
+.filter-select {
+  height: 38px;
+  padding: 0 0.75rem;
+  border: 1.5px solid var(--border-2);
+  border-radius: 10px;
+  background: var(--cream);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  cursor: pointer;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.filter-select:focus { border-color: var(--amber); }
+
+/* ── Field hint text ── */
+.field-hint {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--ink-4);
+  margin-top: 0.35rem;
+  line-height: 1.4;
+}
 
 /* ════════════════════════════════════════════
    RESPONSIVE — Mobile first
@@ -1379,3 +1419,4 @@ body {
   .dashboard-body { padding: 3rem 2.5rem 6rem; }
   /* list view — single column */
 }
+

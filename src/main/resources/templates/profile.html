@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0F1B2D">
+    <meta name="robots" content="noindex, nofollow">
     <title>Profile – Inkwell</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230F1B2D'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-family='Georgia,serif' font-size='20' font-weight='700' fill='%23E8A32E'%3EI%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="/static/css/app.css">
@@ -54,6 +56,34 @@
             </div>
         </div>
 
+        <!-- Stats summary -->
+        <div class="stats-row" id="profileStats" style="display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+            <div class="stat-chip" id="statStreak">🔥 – day streak</div>
+            <div class="stat-chip" id="statTotal">📖 – entries</div>
+            <div class="stat-chip" id="statTopMood">✨ Top mood: –</div>
+        </div>
+
+        <!-- Update profile -->
+        <div class="card-section">
+            <div class="section-hd">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+                Update Profile
+            </div>
+            <form id="updateProfileForm" class="profile-form" onsubmit="handleUpdateProfile(event)">
+                <div class="field">
+                    <label for="profileNameInput">Display name</label>
+                    <input type="text" id="profileNameInput" placeholder="Your name" required autocomplete="name">
+                </div>
+                <div id="profileUpdateError"   class="msg msg-error   hidden" style="margin-bottom:0.75rem;"></div>
+                <div id="profileUpdateSuccess" class="msg msg-success hidden" style="margin-bottom:0.75rem;"></div>
+                <button type="submit" class="btn btn-primary" id="updateProfileBtn" style="align-self:flex-start; padding:0.65rem 1.5rem;">
+                    <span class="btn-text">Save Changes</span>
+                </button>
+            </form>
+        </div>
+
         <!-- Change password -->
         <div class="card-section">
             <div class="section-hd">
@@ -70,7 +100,8 @@
                 </div>
                 <div class="field">
                     <label for="newPassword">New password</label>
-                    <input type="password" id="newPassword" placeholder="Min 6 characters" required autocomplete="new-password">
+                    <input type="password" id="newPassword" placeholder="Min 8 chars, uppercase, lowercase &amp; digit" required autocomplete="new-password">
+                    <small class="field-hint">At least 8 characters with uppercase, lowercase, and a digit.</small>
                 </div>
                 <div class="field">
                     <label for="confirmPassword">Confirm new password</label>

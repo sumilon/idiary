@@ -14,15 +14,24 @@ fun Route.authRoutes(authService: AuthService) {
     route("/auth") {
 
         post("/register") {
-            val request = call.receive<RegisterRequest>()
-            val response = authService.register(request)
-            call.respond(HttpStatusCode.Created, ApiResponse(success = true, data = response))
+            val request    = call.receive<RegisterRequest>()
+            val authResult = authService.register(request)
+            call.respond(HttpStatusCode.Created, ApiResponse<AuthResponse>(success = true, data = authResult))
         }
 
         post("/login") {
-            val request = call.receive<LoginRequest>()
-            val response = authService.login(request)
-            call.respond(HttpStatusCode.OK, ApiResponse(success = true, data = response))
+            val request    = call.receive<LoginRequest>()
+            val authResult = authService.login(request)
+            call.respond(HttpStatusCode.OK, ApiResponse<AuthResponse>(success = true, data = authResult))
+        }
+
+        // Exchange a valid refresh token for a fresh token pair (rotation)
+        authenticate("auth-jwt-refresh") {
+            post("/refresh") {
+                val userId     = call.userId()
+                val authResult = authService.refreshToken(userId)
+                call.respond(HttpStatusCode.OK, ApiResponse<AuthResponse>(success = true, data = authResult))
+            }
         }
 
         authenticate("auth-jwt") {
@@ -31,6 +40,20 @@ fun Route.authRoutes(authService: AuthService) {
                 val request = call.receive<ChangePasswordRequest>()
                 authService.changePassword(userId, request)
                 call.respond(HttpStatusCode.OK, ApiResponse<Unit>(success = true, message = "Password changed successfully"))
+            }
+
+            // Profile management
+            get("/profile") {
+                val userId = call.userId()
+                val user   = authService.getProfile(userId)
+                call.respond(HttpStatusCode.OK, ApiResponse<UserDTO>(success = true, data = user))
+            }
+
+            put("/profile") {
+                val userId  = call.userId()
+                val request = call.receive<UpdateProfileRequest>()
+                val updated = authService.updateProfile(userId, request)
+                call.respond(HttpStatusCode.OK, ApiResponse<UserDTO>(success = true, data = updated))
             }
         }
     }

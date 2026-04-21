@@ -1,24 +1,23 @@
 /* ── Inkwell – Main JavaScript ── */
 
 // ── Auth storage ──
-// Supports both key names (memoir_ was original; inkwell_ was used in an intermediate build).
-// On first load we migrate any inkwell_ keys to memoir_ so existing sessions survive.
-const TOKEN_KEY    = 'memoir_token';
-const USER_KEY     = 'memoir_user';
-const TOKEN_KEY_OLD = 'inkwell_token';
-const USER_KEY_OLD  = 'inkwell_user';
+const TOKEN_KEY         = 'memoir_token';
+const REFRESH_TOKEN_KEY = 'memoir_refresh_token';
+const USER_KEY          = 'memoir_user';
 
-(function migrateAuthKeys() {
-  const oldToken = localStorage.getItem(TOKEN_KEY_OLD);
-  const oldUser  = localStorage.getItem(USER_KEY_OLD);
-  if (oldToken) { localStorage.setItem(TOKEN_KEY, oldToken); localStorage.removeItem(TOKEN_KEY_OLD); }
-  if (oldUser)  { localStorage.setItem(USER_KEY,  oldUser);  localStorage.removeItem(USER_KEY_OLD); }
-})();
-
-const getToken  = ()     => localStorage.getItem(TOKEN_KEY);
-const getUser   = ()     => { try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; } };
-const setAuth   = (t, u) => { localStorage.setItem(TOKEN_KEY, t); localStorage.setItem(USER_KEY, JSON.stringify(u)); };
-const clearAuth = ()     => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); };
+const getToken        = ()        => localStorage.getItem(TOKEN_KEY);
+const getRefreshToken = ()        => localStorage.getItem(REFRESH_TOKEN_KEY);
+const getUser         = ()        => { try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; } };
+const setAuth         = (t, rt, u) => {
+  localStorage.setItem(TOKEN_KEY, t);
+  if (rt) localStorage.setItem(REFRESH_TOKEN_KEY, rt);
+  localStorage.setItem(USER_KEY, JSON.stringify(u));
+};
+const clearAuth = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+};
 
 function requireAuth() {
   if (!getToken()) { window.location.href = '/login'; return false; }
@@ -31,7 +30,7 @@ function logout() {
 }
 
 // ── API helper ──
-async function api(method, path, body) {
+async function api(method, path, body, isRetry = false) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -39,11 +38,37 @@ async function api(method, path, body) {
   const res  = await fetch(`/api${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
   const data = await res.json();
 
-  if (res.status === 401) { clearAuth(); window.location.href = '/login'; throw new Error('Session expired'); }
+  // On 401, try a silent token refresh once before forcing re-login
+  if (res.status === 401 && !isRetry) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) return api(method, path, body, true);
+    clearAuth();
+    window.location.href = '/login';
+    throw new Error('Session expired');
+  }
+
   if (!data.success && data.message) throw new Error(data.message);
   if (!res.ok && !data.success)      throw new Error('Request failed');
 
   return data.data ?? data;
+}
+
+async function tryRefreshToken() {
+  const rt = getRefreshToken();
+  if (!rt) return false;
+  try {
+    const res  = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${rt}`, 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (data.success && data.data?.token) {
+      setAuth(data.data.token, data.data.refreshToken, data.data.user);
+      return true;
+    }
+  } catch (_) { /* fall through */ }
+  return false;
 }
 
 // ── Utility helpers ──
@@ -93,7 +118,7 @@ async function handleLogin(e) {
       email:    document.getElementById('email').value,
       password: document.getElementById('password').value,
     });
-    setAuth(data.token, data.user);
+    setAuth(data.token, data.refreshToken, data.user);
     window.location.href = '/dashboard';
   } catch (err) {
     errEl.textContent = err.message || 'Login failed. Please try again.';
@@ -117,7 +142,7 @@ async function handleRegister(e) {
       email:    document.getElementById('email').value,
       password: document.getElementById('password').value,
     });
-    setAuth(data.token, data.user);
+    setAuth(data.token, data.refreshToken, data.user);
     window.location.href = '/dashboard';
   } catch (err) {
     errEl.textContent = err.message || 'Registration failed. Please try again.';
@@ -149,7 +174,25 @@ async function initDashboard() {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 
-  await loadEntries();
+  await Promise.all([loadEntries(), loadDashboardStats()]);
+}
+
+async function loadDashboardStats() {
+  try {
+    const [streak, analytics] = await Promise.all([
+      api('GET', '/diary/analytics/streak'),
+      api('GET', '/diary/analytics/mood'),
+    ]);
+    const streakEl = document.getElementById('statStreak');
+    const totalEl  = document.getElementById('statTotal');
+    const moodEl   = document.getElementById('statTopMood');
+    if (streakEl) streakEl.textContent = `🔥 ${streak.currentStreak} day streak`;
+    if (totalEl)  totalEl.textContent  = `📖 ${streak.totalDaysJournaled} days journaled`;
+    if (moodEl) {
+      const top = analytics.moodCounts?.[0];
+      moodEl.textContent = top ? `✨ Top mood: ${top.mood} (${top.count}×)` : '✨ No mood data yet';
+    }
+  } catch (_) { /* stats are non-critical */ }
 }
 
 async function loadEntries() {
@@ -157,7 +200,8 @@ async function loadEntries() {
   if (!container) return;
 
   try {
-    allEntries      = await api('GET', '/diary');
+    const paged     = await api('GET', '/diary?limit=100');
+    allEntries      = paged.items ?? paged ?? [];
     filteredEntries = allEntries;
     currentPage     = 1;
     renderPage();
@@ -170,14 +214,15 @@ async function loadEntries() {
   }
 }
 
-function filterEntries(query) {
-  const q = query.toLowerCase().trim();
-  filteredEntries = q
-    ? allEntries.filter(e =>
-        (e.title   || '').toLowerCase().includes(q) ||
-        (e.preview || '').toLowerCase().includes(q)
-      )
-    : allEntries;
+function applyFilters(query) {
+  const q    = (query ?? document.getElementById('searchInput')?.value ?? '').toLowerCase().trim();
+  const mood = document.getElementById('moodFilter')?.value ?? '';
+
+  filteredEntries = allEntries.filter(e => {
+    const matchQ    = !q    || (e.title   || '').toLowerCase().includes(q) || (e.preview || '').toLowerCase().includes(q);
+    const matchMood = !mood || e.mood === mood;
+    return matchQ && matchMood;
+  });
   currentPage = 1;
   renderPage();
 }
@@ -216,7 +261,7 @@ function renderPage() {
       <div class="entry-row-left">
         ${entry.mood ? `<div class="row-mood" title="${moodLabel(entry.mood)}">${moodEmoji(entry.mood)}</div>` : '<div class="row-mood-placeholder"></div>'}
       </div>
-      <div class="entry-row-body">
+        <div class="entry-row-body">
         <div class="row-title">${escapeHtml(entry.title || 'Untitled')}</div>
         <div class="row-preview">${escapeHtml(entry.preview || '')}</div>
       </div>
@@ -301,7 +346,6 @@ async function deleteEntry(e, id) {
 
 // ── Entry page ──
 
-let currentEntry = null;
 
 async function initEntryPage() {
   if (!requireAuth()) return;
@@ -340,7 +384,6 @@ async function loadEntry(id) {
 
   try {
     const entry = await api('GET', `/diary/${id}`);
-    currentEntry = entry;
 
     if (titleEl)   titleEl.value   = entry.title   || '';
     if (contentEl) contentEl.value = entry.content || '';
@@ -357,7 +400,6 @@ async function loadEntry(id) {
     if (titleEl)   titleEl.placeholder   = 'Give your entry a title…';
     if (contentEl) contentEl.placeholder = 'What\'s on your mind today?\n\nWrite freely — your thoughts, feelings, experiences…';
     showSaveStatus(msg, 'error');
-    console.error('[loadEntry]', err);
   }
 }
 
@@ -375,13 +417,12 @@ async function rewriteWithAI() {
   try {
     const result = await api('POST', '/diary/ai-rewrite', { content, instruction });
     document.getElementById('aiGeneratedContent').value = result.rewritten;
-    document.getElementById('usingAiContent').value     = 'false';
     showAiPanel(result.rewritten);
   } catch (err) {
     showAiError(err.message || 'AI enhancement failed. Please try again.');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Enhance with AI`;
+    btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Enhance`;
   }
 }
 
@@ -400,13 +441,11 @@ function hideAiPanel() {
 
 function useAiContent() {
   document.getElementById('entryContent').value = document.getElementById('aiGeneratedContent').value;
-  document.getElementById('usingAiContent').value = 'true';
   hideAiPanel();
   showSaveStatus('AI content applied! Remember to save.', 'success');
 }
 
 function keepOriginal() {
-  document.getElementById('usingAiContent').value = 'false';
   hideAiPanel();
 }
 
@@ -428,7 +467,7 @@ async function saveEntry() {
   if (!content) { showSaveStatus('Please write something before saving.', 'error'); return; }
 
   btn.disabled    = true;
-  btn.textContent = 'Saving…';
+  btn.innerHTML   = `<span class="spinner" style="width:13px;height:13px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:5px"></span>Saving…`;
 
   try {
     if (isNew) {
@@ -458,19 +497,87 @@ function showSaveStatus(msg, type) {
 
 // ── Profile page ──
 
-function initProfilePage() {
+async function initProfilePage() {
   if (!requireAuth()) return;
 
-  const user = getUser();
-  if (!user) return;
+  // Load latest profile from server
+  try {
+    const profile = await api('GET', '/auth/profile');
+    // Update local storage with fresh data
+    const stored = getUser();
+    if (stored) setAuth(getToken(), getRefreshToken(), { ...stored, name: profile.name, email: profile.email });
 
-  const nameEl   = document.getElementById('profileName');
-  const emailEl  = document.getElementById('profileEmail');
-  const avatarEl = document.getElementById('profileAvatar');
+    const nameEl   = document.getElementById('profileName');
+    const emailEl  = document.getElementById('profileEmail');
+    const avatarEl = document.getElementById('profileAvatar');
+    const nameInput = document.getElementById('profileNameInput');
 
-  if (nameEl)   nameEl.textContent  = user.name  || '–';
-  if (emailEl)  emailEl.textContent = user.email || '–';
-  if (avatarEl) avatarEl.textContent = (user.name || '?').charAt(0).toUpperCase();
+    if (nameEl)   nameEl.textContent  = profile.name  || '–';
+    if (emailEl)  emailEl.textContent = profile.email || '–';
+    if (avatarEl) avatarEl.textContent = (profile.name || '?').charAt(0).toUpperCase();
+    if (nameInput) nameInput.value    = profile.name  || '';
+  } catch (_) {
+    // Fallback to cached
+    const user = getUser();
+    if (!user) return;
+    const nameEl   = document.getElementById('profileName');
+    const emailEl  = document.getElementById('profileEmail');
+    const avatarEl = document.getElementById('profileAvatar');
+    const nameInput = document.getElementById('profileNameInput');
+    if (nameEl)   nameEl.textContent  = user.name  || '–';
+    if (emailEl)  emailEl.textContent = user.email || '–';
+    if (avatarEl) avatarEl.textContent = (user.name || '?').charAt(0).toUpperCase();
+    if (nameInput) nameInput.value    = user.name || '';
+  }
+
+  // Load stats
+  try {
+    const [streak, analytics] = await Promise.all([
+      api('GET', '/diary/analytics/streak'),
+      api('GET', '/diary/analytics/mood'),
+    ]);
+    const streakEl = document.getElementById('statStreak');
+    const totalEl  = document.getElementById('statTotal');
+    const moodEl   = document.getElementById('statTopMood');
+    if (streakEl) streakEl.textContent = `🔥 ${streak.currentStreak} day streak`;
+    if (totalEl)  totalEl.textContent  = `📖 ${streak.totalDaysJournaled} days journaled`;
+    if (moodEl) {
+      const top = analytics.moodCounts?.[0];
+      moodEl.textContent = top ? `✨ Top mood: ${top.mood} (${top.count}×)` : '✨ No mood data yet';
+    }
+  } catch (_) { /* non-critical */ }
+}
+
+async function handleUpdateProfile(e) {
+  e.preventDefault();
+  const btn       = document.getElementById('updateProfileBtn');
+  const errEl     = document.getElementById('profileUpdateError');
+  const successEl = document.getElementById('profileUpdateSuccess');
+  errEl.classList.add('hidden');
+  successEl.classList.add('hidden');
+
+  const name = document.getElementById('profileNameInput').value.trim();
+  if (!name) { errEl.textContent = 'Name cannot be blank.'; errEl.classList.remove('hidden'); return; }
+
+  btn.disabled = true;
+  btn.querySelector('.btn-text').textContent = 'Saving…';
+  try {
+    const updated = await api('PUT', '/auth/profile', { name });
+    // Update cached user
+    const stored = getUser();
+    if (stored) setAuth(getToken(), getRefreshToken(), { ...stored, name: updated.name });
+
+    document.getElementById('profileName').textContent   = updated.name;
+    document.getElementById('profileAvatar').textContent = (updated.name || '?').charAt(0).toUpperCase();
+    successEl.textContent = 'Profile updated!';
+    successEl.classList.remove('hidden');
+  } catch (err) {
+    errEl.textContent = err.message || 'Failed to update profile.';
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.querySelector('.btn-text').textContent = 'Save Changes';
+  }
 }
 
 async function handleChangePassword(e) {

@@ -43,9 +43,14 @@ data class ChangePasswordRequest(
     val newPassword: String
 )
 
+
+@Serializable
+data class UpdateProfileRequest(val name: String)
+
 @Serializable
 data class AuthResponse(
     val token: String,
+    val refreshToken: String,
     val user: UserDTO
 )
 
@@ -81,9 +86,7 @@ data class AiRewriteRequest(
 )
 
 @Serializable
-data class AiRewriteResponse(
-    val rewritten: String
-)
+data class AiRewriteResponse(val rewritten: String)
 
 // ── Generic response ──
 
@@ -92,6 +95,15 @@ data class ApiResponse<T>(
     val success: Boolean,
     val data: T? = null,
     val message: String? = null
+)
+
+// ── Pagination ──
+
+@Serializable
+data class PagedResponse<T>(
+    val items: List<T>,
+    val hasMore: Boolean,
+    val nextCursor: String?
 )
 
 // ── List projection ──
@@ -104,4 +116,23 @@ data class DiaryListItem(
     val mood: String?,
     val createdAt: Long,
     val updatedAt: Long
+)
+
+// ── Analytics ──
+
+@Serializable
+data class MoodCount(val mood: String, val count: Int)
+
+@Serializable
+data class MoodAnalytics(
+    val moodCounts: List<MoodCount>,
+    val noMoodCount: Int,
+    val totalEntries: Int
+)
+
+@Serializable
+data class EntryStreak(
+    val currentStreak: Int,
+    val longestStreak: Int,
+    val totalDaysJournaled: Int
 )

@@ -4,7 +4,6 @@ import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -13,20 +12,17 @@ import io.ktor.server.config.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import org.slf4j.LoggerFactory
 
 class GrokAIService(config: ApplicationConfig) {
 
-    private val logger  = LoggerFactory.getLogger(GrokAIService::class.java)
-    private val apiKey  = config.property("grok.apiKey").getString()
-    private val baseUrl = config.property("grok.baseUrl").getString()
-    private val model   = config.property("grok.model").getString()
+    private val apiKey  = config.propertyOrNull("grok.apiKey")?.getString().orEmpty()
+    private val baseUrl = config.propertyOrNull("grok.baseUrl")?.getString() ?: "https://api.groq.com/openai/v1"
+    private val model   = config.propertyOrNull("grok.model")?.getString() ?: "llama3-8b-8192"
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     private val client = HttpClient(CIO) {
         install(ContentNegotiation) { json(json) }
-        install(Logging)            { level = LogLevel.INFO }
         install(HttpTimeout) {
             requestTimeoutMillis = 30_000
             connectTimeoutMillis = 10_000
@@ -34,11 +30,10 @@ class GrokAIService(config: ApplicationConfig) {
     }
 
     suspend fun rewriteContent(content: String, instruction: String): String {
-        val systemPrompt = """
-            You are a helpful diary writing assistant. Help users improve their diary entries while
-            preserving their personal voice and emotions. Return ONLY the improved text — no
-            explanations, no preamble.
-        """.trimIndent()
+        if (apiKey.isBlank()) throw IllegalStateException("AI service is not configured")
+
+        val systemPrompt = "You are a helpful diary writing assistant. Help users improve their diary entries " +
+            "while preserving their personal voice and emotions. Return ONLY the improved text — no explanations, no preamble."
 
         val userPrompt = when (instruction.lowercase()) {
             "improve"  -> "Please improve this diary entry to make it more readable and well-written:\n\n$content"
@@ -53,36 +48,22 @@ class GrokAIService(config: ApplicationConfig) {
             val response = client.post("$baseUrl/chat/completions") {
                 contentType(ContentType.Application.Json)
                 header("Authorization", "Bearer $apiKey")
-                setBody(
-                    GrokRequest(
-                        model    = model,
-                        messages = listOf(
-                            GrokMessage("system", systemPrompt),
-                            GrokMessage("user",   userPrompt)
-                        )
-                    )
-                )
+                setBody(GrokRequest(
+                    model    = model,
+                    messages = listOf(GrokMessage("system", systemPrompt), GrokMessage("user", userPrompt))
+                ))
             }
-
             val body = response.bodyAsText()
-            if (!response.status.isSuccess()) {
-                throw Exception("Groq API error: ${response.status} – $body")
-            }
-
-            json.decodeFromString<GrokResponse>(body)
-                .choices?.firstOrNull()?.message?.content
+            if (!response.status.isSuccess()) throw Exception("Groq API error: ${response.status}")
+            json.decodeFromString<GrokResponse>(body).choices?.firstOrNull()?.message?.content
                 ?: throw Exception("No response from AI")
-
         } catch (e: Exception) {
-            logger.error("Groq API error: ${e.message}", e)
-            throw Exception("AI service temporarily unavailable. Please try again.")
+            throw Exception("AI service temporarily unavailable. Please try again.", e)
         }
     }
 
     fun close() = client.close()
 }
-
-// ── Groq API data classes ──
 
 @Serializable
 data class GrokRequest(
@@ -93,15 +74,10 @@ data class GrokRequest(
 )
 
 @Serializable
-data class GrokMessage(
-    val role: String,
-    val content: String
-)
+data class GrokMessage(val role: String, val content: String)
 
 @Serializable
-data class GrokResponse(
-    val choices: List<GrokChoice>? = null
-)
+data class GrokResponse(val choices: List<GrokChoice>? = null)
 
 @Serializable
 data class GrokChoice(
