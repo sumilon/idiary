@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0F1B2D">
+    <meta name="description" content="Sign in to Inkwell — your private online diary.">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Sign In – Inkwell</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230F1B2D'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-family='Georgia,serif' font-size='20' font-weight='700' fill='%23E8A32E'%3EI%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<div class="auth-page">
+
+    <!-- Left branding panel -->
+    <div class="auth-panel">
+        <div class="panel-brand">
+            <div class="panel-logo">
+                <div class="panel-logo-mark">I</div>
+                <span class="panel-logo-name">Inkwell</span>
+            </div>
+        </div>
+        <div class="panel-content">
+            <p class="panel-tagline">Your thoughts,<br><em>beautifully kept.</em></p>
+            <p class="panel-sub">A private space to write, reflect, and remember what matters most to you.</p>
+        </div>
+        <div class="panel-features">
+            <div class="panel-feature">
+                <div class="panel-feature-icon">🔒</div>
+                <div class="panel-feature-text">
+                    <strong>Completely Private</strong>
+                    Your diary is encrypted and only yours.
+                </div>
+            </div>
+            <div class="panel-feature">
+                <div class="panel-feature-icon">✦</div>
+                <div class="panel-feature-text">
+                    <strong>AI Writing Assistant</strong>
+                    Refine your entries with intelligent suggestions.
+                </div>
+            </div>
+            <div class="panel-feature">
+                <div class="panel-feature-icon">📱</div>
+                <div class="panel-feature-text">
+                    <strong>Write Anywhere</strong>
+                    Seamlessly works on mobile, tablet, and desktop.
+                </div>
+            </div>
+        </div>
+        <div class="panel-dots">
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+        </div>
+    </div>
+
+    <!-- Right form pane -->
+    <div class="auth-form-pane">
+        <!-- Shown only on mobile -->
+        <div class="auth-mobile-brand">
+            <div class="mobile-logo-mark">I</div>
+            <span class="mobile-logo-name">Inkwell</span>
+        </div>
+
+        <div class="form-head">
+            <h1>Welcome back</h1>
+            <p>Sign in to continue writing.</p>
+        </div>
+
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="field">
+                <label for="email">Email address</label>
+                <input type="email" id="email" placeholder="you@example.com" required autocomplete="email">
+            </div>
+            <div class="field">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
+                <span class="btn-text">Sign In</span>
+            </button>
+
+            <div id="loginError" class="msg msg-error hidden" style="margin-top:1rem;"></div>
+        </form>
+
+        <p class="auth-footer">No account yet? <a href="/register">Create one free</a></p>
+    </div>
+
+</div>
+<script src="/static/js/app.js"></script>
+</body>
+</html>
