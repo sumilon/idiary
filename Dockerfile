@@ -12,12 +12,12 @@ ENV PATH="/opt/gradle-8.12.1/bin:$PATH"
 COPY build.gradle.kts settings.gradle.kts ./
 COPY gradle gradle
 
-# Pre-download all dependencies (cached layer — only re-runs if build files change)
-RUN gradle dependencies --no-daemon --quiet 2>/dev/null || true
-
-# Copy source and build the fat JAR
+# Build the fat JAR with merged service files (required for gRPC/Firebase)
 COPY src src
 RUN gradle shadowJar --no-daemon --quiet
+
+# Show built JAR name for debugging
+RUN echo "=== Built JARs ===" && find /app/build/libs -name "*.jar" && echo "==="
 
 # ---- Stage 2: Runtime ----
 FROM eclipse-temurin:21-jre-alpine
