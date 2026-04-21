@@ -1,7 +1,7 @@
 plugins {
     kotlin("jvm") version "1.9.23"
     kotlin("plugin.serialization") version "1.9.23"
-    id("com.github.johnrengelman.shadow") version "7.1.2"
+    id("com.gradleup.shadow") version "8.3.6"
     application
 }
 
@@ -18,6 +18,7 @@ application {
         "-Djava.awt.headless=true"
     )
 }
+
 
 repositories {
     mavenCentral()
@@ -45,7 +46,12 @@ dependencies {
     implementation("io.ktor:ktor-client-content-negotiation-jvm:$ktorVersion")
 
     // Firebase Admin SDK
-    implementation("com.google.firebase:firebase-admin:$firebaseVersion")
+    // Exclude grpc-netty to avoid Netty version conflict with Ktor's Netty server.
+    // grpc-netty-shaded provides an isolated (relocated) Netty so both can coexist safely.
+    implementation("com.google.firebase:firebase-admin:$firebaseVersion") {
+        exclude(group = "io.grpc", module = "grpc-netty")
+    }
+    implementation("io.grpc:grpc-netty-shaded:1.76.0")
 
     // JWT
     implementation("com.auth0:java-jwt:4.4.0")
@@ -98,25 +104,6 @@ tasks {
         archiveClassifier.set("")
         archiveVersion.set("")
         // Merges META-INF/services/* — required for gRPC/Firebase service providers
-        mergeServiceFiles()
-        manifest {
-            attributes["Main-Class"] = "com.diary.ApplicationKt"
-        }
-    }
-
-    build {
-        dependsOn(shadowJar)
-    }
-}
-
-tasks {
-    shadowJar {
-        archiveBaseName.set("diary-app")
-        archiveClassifier.set("")
-        archiveVersion.set("")
-        // Critical: merges META-INF/services/* files instead of overwriting them.
-        // Without this, gRPC (used by Firebase) loses its service provider
-        // registrations and throws "Could not find policy 'pick_first'" at runtime.
         mergeServiceFiles()
         manifest {
             attributes["Main-Class"] = "com.diary.ApplicationKt"
