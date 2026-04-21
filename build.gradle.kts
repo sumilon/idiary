@@ -1,7 +1,7 @@
 plugins {
     kotlin("jvm") version "1.9.23"
     kotlin("plugin.serialization") version "1.9.23"
-    id("com.gradleup.shadow") version "8.3.6"
+    id("com.gradleup.shadow") version "8.3.8"
     application
 }
 

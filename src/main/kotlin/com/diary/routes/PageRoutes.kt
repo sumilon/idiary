@@ -43,14 +43,15 @@ private suspend fun ApplicationCall.respondTemplate(filename: String) {
 private suspend fun ApplicationCall.respondEntryPage(entryId: String, isNew: Boolean) {
     var html = loadTemplate("entry.html")
 
+    // Use regex replace to be immune to whitespace differences in the HTML attributes
     html = html
         .replace(
-            """<input type="hidden" id="entryId"     value="">""",
-            """<input type="hidden" id="entryId"     value="$entryId">"""
+            Regex("""<input\s+type="hidden"\s+id="entryId"\s+value="[^"]*">"""),
+            """<input type="hidden" id="entryId" value="$entryId">"""
         )
         .replace(
-            """<input type="hidden" id="isNewEntry"  value="true">""",
-            """<input type="hidden" id="isNewEntry"  value="${if (isNew) "true" else "false"}">"""
+            Regex("""<input\s+type="hidden"\s+id="isNewEntry"\s+value="[^"]*">"""),
+            """<input type="hidden" id="isNewEntry" value="${if (isNew) "true" else "false"}">"""
         )
 
     respondText(html, ContentType.Text.Html)

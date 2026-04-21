@@ -88,6 +88,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── Utility ── */
+.hidden { display: none !important; }
+
 /* ════════════════════════════════════════════
    AUTH PAGES — Login & Register
    ════════════════════════════════════════════ */
@@ -239,11 +242,24 @@ body {
 
 /* Right form pane */
 .auth-form-pane {
-  width: 100%; max-width: 480px;
-  display: flex; flex-direction: column; justify-content: center;
-  padding: 3rem 3.5rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 3rem 2rem;
   background: var(--cream);
   border-left: 1px solid var(--border);
+}
+
+/* Inner content wrapper — constrains form width and keeps it centered */
+.auth-form-pane > *:not(.auth-mobile-brand) {
+  width: 100%;
+  max-width: 420px;
+}
+.auth-form-pane .auth-mobile-brand {
+  width: 100%;
+  max-width: 420px;
 }
 
 /* Mobile brand shown only on small screens */
@@ -1087,6 +1103,7 @@ body {
 
 /* Save toast */
 .save-toast {
+  display: none; /* hidden by default; JS removes .hidden and sets className */
   position: fixed;
   bottom: calc(var(--bottom-nav-h) + 1.25rem);
   right: 1.25rem;
@@ -1097,6 +1114,10 @@ body {
   box-shadow: var(--shadow-md);
   z-index: 300;
   animation: toastIn 0.22s cubic-bezier(0.34,1.56,0.64,1);
+}
+/* When JS sets className to save-toast ok/err (without hidden), show it */
+.save-toast.ok, .save-toast.err {
+  display: block;
 }
 .save-toast.ok  { background: var(--success-lt); color: var(--success); border: 1px solid rgba(26,127,90,0.18); }
 .save-toast.err { background: var(--danger-lt);  color: var(--danger);  border: 1px solid rgba(192,57,43,0.18); }
@@ -1222,9 +1243,11 @@ body {
 .section-hd.danger-hd { color: var(--danger); }
 .section-hd.danger-hd svg { color: var(--danger); }
 
-.profile-form { display: flex; flex-direction: column; }
+.profile-form { display: flex; flex-direction: column; gap: 0.25rem; align-items: flex-start; width: 100%; }
 
-.danger-note {
+.profile-form .field { width: 100%; }
+.profile-form .msg   { width: 100%; }
+.profile-form .btn   { padding: 0.65rem 1.5rem; margin-top: 0.5rem; }
   font-size: 0.875rem;
   color: var(--ink-3);
   margin-bottom: 1.1rem;
@@ -1311,11 +1334,13 @@ body {
   /* Auth pages on mobile */
   .auth-panel { display: none; }
   .auth-form-pane {
-    max-width: 100%;
     padding: 2.5rem 1.5rem 3rem;
     justify-content: flex-start;
+    align-items: stretch;
     padding-top: 3rem;
   }
+  .auth-form-pane > *:not(.auth-mobile-brand),
+  .auth-form-pane .auth-mobile-brand { max-width: 100%; }
   .auth-mobile-brand { display: flex; }
 
   .dashboard-body,
@@ -1329,14 +1354,17 @@ body {
   .dash-top { flex-direction: column; align-items: flex-start; gap: 1rem; }
   .btn-new-entry { width: 100%; justify-content: center; }
 
-  /* list view — single column */
-
+  /* Search bar wraps on mobile */
+  .search-wrap { flex-wrap: wrap; gap: 0.65rem; }
+  .search-box { max-width: 100%; }
+  .filter-select { width: 100%; }
 
   /* List rows on mobile */
   .entry-row { padding: 0.85rem 1rem; gap: 0.75rem; }
   .entry-row-meta { display: none; }
+  /* Always show delete on touch — no hover available */
   .entry-row-actions { opacity: 1; }
-  .row-del-btn { padding: 0.25rem; }
+  .row-del-btn { padding: 0.4rem; min-width: 32px; min-height: 32px; }
   .h-greeting { display: none; }
   .h-brand-name { font-size: 1.05rem; }
   .header-row { padding: 0 1rem; }
@@ -1385,9 +1413,10 @@ body {
 
 /* ── Tablet (768–1023px) ── */
 @media (min-width: 768px) and (max-width: 1023px) {
-  /* list view — single column */
   .auth-panel { display: flex; }
-  .auth-form-pane { max-width: 420px; padding: 3rem 2.5rem; }
+  .auth-form-pane { padding: 3rem 2.5rem; }
+  .auth-form-pane > *:not(.auth-mobile-brand),
+  .auth-form-pane .auth-mobile-brand { max-width: 400px; }
   .auth-mobile-brand { display: none; }
 }
 
@@ -1407,7 +1436,9 @@ body {
   /* list view — single column */
 
   .auth-panel { display: flex; }
-  .auth-form-pane { max-width: 480px; }
+  .auth-form-pane { padding: 3rem 3.5rem; }
+  .auth-form-pane > *:not(.auth-mobile-brand),
+  .auth-form-pane .auth-mobile-brand { max-width: 440px; }
   .auth-mobile-brand { display: none; }
 
   .panels.split { grid-template-columns: 1fr 1fr; }

@@ -164,11 +164,9 @@ async function initDashboard() {
   if (!requireAuth()) return;
 
   const user     = getUser();
-  const greeting = document.getElementById('headerGreeting');
   const title    = document.getElementById('dashboardTitle');
   const dateEl   = document.getElementById('dashboardDate');
 
-  if (greeting) greeting.textContent = user?.name || '';
   if (title)    title.textContent    = `${greet()}, ${user?.name?.split(' ')[0] || 'there'}`;
   if (dateEl)   dateEl.textContent   = new Date().toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -186,8 +184,8 @@ async function loadDashboardStats() {
     const streakEl = document.getElementById('statStreak');
     const totalEl  = document.getElementById('statTotal');
     const moodEl   = document.getElementById('statTopMood');
-    if (streakEl) streakEl.textContent = `🔥 ${streak.currentStreak} day streak`;
-    if (totalEl)  totalEl.textContent  = `📖 ${streak.totalDaysJournaled} days journaled`;
+    if (streakEl) streakEl.textContent = `🔥 ${streak.currentStreak} ${streak.currentStreak === 1 ? 'day' : 'days'} streak`;
+    if (totalEl)  totalEl.textContent  = `📖 ${streak.totalDaysJournaled} ${streak.totalDaysJournaled === 1 ? 'day' : 'days'} journaled`;
     if (moodEl) {
       const top = analytics.moodCounts?.[0];
       moodEl.textContent = top ? `✨ Top mood: ${top.mood} (${top.count}×)` : '✨ No mood data yet';
@@ -377,6 +375,7 @@ async function initEntryPage() {
 async function loadEntry(id) {
   const titleEl   = document.getElementById('entryTitle');
   const contentEl = document.getElementById('entryContent');
+  const dateEl    = document.getElementById('entryDate');
 
   // Show loading state
   if (titleEl)   titleEl.placeholder   = 'Loading…';
@@ -387,6 +386,17 @@ async function loadEntry(id) {
 
     if (titleEl)   titleEl.value   = entry.title   || '';
     if (contentEl) contentEl.value = entry.content || '';
+
+    // Restore default placeholders after loading
+    if (titleEl)   titleEl.placeholder   = 'Give your entry a title…';
+    if (contentEl) contentEl.placeholder = 'What\'s on your mind today?\n\nWrite freely — your thoughts, feelings, experiences…';
+
+    // Show the entry's actual date, not today
+    if (dateEl && entry.createdAt) {
+      dateEl.textContent = new Date(entry.createdAt).toLocaleDateString('en-US', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      });
+    }
 
     if (entry.mood) {
       const moodInput = document.getElementById('selectedMood');
@@ -491,8 +501,12 @@ function showSaveStatus(msg, type) {
   if (!el) return;
   el.textContent = msg;
   el.className   = `save-toast ${type === 'success' ? 'ok' : 'err'}`;
-  el.classList.remove('hidden');
-  setTimeout(() => el.classList.add('hidden'), 3000);
+  el.style.display = '';  // let CSS class control display
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => {
+    el.className = 'save-toast';
+    el.style.display = 'none';
+  }, 3000);
 }
 
 // ── Profile page ──
@@ -539,8 +553,8 @@ async function initProfilePage() {
     const streakEl = document.getElementById('statStreak');
     const totalEl  = document.getElementById('statTotal');
     const moodEl   = document.getElementById('statTopMood');
-    if (streakEl) streakEl.textContent = `🔥 ${streak.currentStreak} day streak`;
-    if (totalEl)  totalEl.textContent  = `📖 ${streak.totalDaysJournaled} days journaled`;
+    if (streakEl) streakEl.textContent = `🔥 ${streak.currentStreak} ${streak.currentStreak === 1 ? 'day' : 'days'} streak`;
+    if (totalEl)  totalEl.textContent  = `📖 ${streak.totalDaysJournaled} ${streak.totalDaysJournaled === 1 ? 'day' : 'days'} journaled`;
     if (moodEl) {
       const top = analytics.moodCounts?.[0];
       moodEl.textContent = top ? `✨ Top mood: ${top.mood} (${top.count}×)` : '✨ No mood data yet';
